@@ -3,10 +3,10 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
-from . import incidents, planning
+from . import incidents, planning, samples
 from .database import Session
-from .models import Audit, Berth, BerthRequest, DelayIncident, DispatchReview, Role, TideWindow, Tug, TugAssignment, User
-from .schemas import AssignTug, CloseInput, DispatchInput, IncidentInput, Login, MarginDecision, RequestInput, Schedule, TideInput
+from .models import Audit, Berth, BerthRequest, DelayIncident, DispatchReview, Role, TideWindow, TrainingSample, Tug, TugAssignment, User
+from .schemas import AssignTug, CloseInput, CorrectionInput, DispatchInput, IncidentInput, Login, MarginDecision, RequestInput, Schedule, TideInput
 from .security import current_user, permitted, token_for, valid_password
 
 router = APIRouter()
@@ -47,6 +47,8 @@ def watch(user: User = read):
             'assignments': [row(item) for item in db.scalars(select(TugAssignment).order_by(TugAssignment.starts_at))],
             'incidents': [row(item) for item in db.scalars(select(DelayIncident).order_by(DelayIncident.observed_at.desc()))],
             'reviews': [row(item) for item in db.scalars(select(DispatchReview).order_by(DispatchReview.issued_at.desc()))],
+            'samples': [row(item) for item in db.scalars(select(TrainingSample).order_by(
+                TrainingSample.incident_code, TrainingSample.version.desc()))],
         }
 
 
@@ -124,4 +126,40 @@ def issue_action(code: str, data: DispatchInput, user: User = supervise):
 @router.post('/delay-incidents/{code}/close')
 def close_review(code: str, data: CloseInput, user: User = supervise):
     with Session.begin() as db:
-        return row(incidents.close(db, user.username, code, data))
+        record, sample = incidents.close(db, user.username, code, data)
+        output = {**row(record), 'sample': row(sample) if sample else None}
+    if sample:
+        samples.notify()
+    return output
+
+
+@router.post('/delay-incidents/{code}/correction')
+def correct_all_fast(code: str, data: CorrectionInput, user: User = supervise):
+    with Session.begin() as db:
+        record = samples.correct(db, user.username, code, data)
+        sample = samples.latest(db, code)
+        output = {**row(record), 'sample': row(sample) if sample else None}
+    samples.notify()
+    return output
+
+
+@router.get('/training-samples')
+def training_samples(user: User = read):
+    with Session() as db:
+        samples = list(db.scalars(select(TrainingSample).order_by(
+            TrainingSample.incident_code, TrainingSample.version.desc())))
+        return [row(sample) for sample in samples]
+
+
+@router.post('/training-samples/{sample_id}/retry', status_code=202)
+def retry_sample(sample_id: int, user: User = supervise):
+    with Session.begin() as db:
+        output = row(samples.retry(db, user.username, sample_id))
+    samples.notify()
+    return output
+
+
+@router.post('/training-samples/{sample_id}/publish')
+def publish_sample(sample_id: int, user: User = supervise):
+    with Session.begin() as db:
+        return row(samples.publish(db, user.username, sample_id))

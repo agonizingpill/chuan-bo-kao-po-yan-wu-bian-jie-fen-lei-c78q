@@ -73,3 +73,8 @@ class DispatchInput(Payload):
 class CloseInput(Payload):
     all_fast_at: NaiveDatetime
     outcome: Note
+
+
+class CorrectionInput(Payload):
+    all_fast_at: NaiveDatetime
+    reason: Note

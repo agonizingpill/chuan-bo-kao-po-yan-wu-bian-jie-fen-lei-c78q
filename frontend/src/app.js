@@ -1,13 +1,13 @@
 import {api} from './api.js';
 import {incidents, reviews} from './incidents.js';
 import {resources, schedule} from './planning.js';
-import {roles, setSession, store} from './store.js';
+import {roles, setSession, store, supervisor} from './store.js';
 import {blank, esc, field} from './ui.js';
 
 const root = document.querySelector('#root');
 const notice = document.querySelector('#notice');
 const sections = {schedule: ['靠泊申请', schedule], resources: ['潮汐与拖轮', resources], incidents: ['延误边界', incidents], reviews: ['调度复盘', reviews]};
-const feedback = {register: '申请已登记', publish: '潮窗已发布', revise: '改期已保存', assign: '拖轮已预约', confirm: '靠泊已确认', report: '现场事件已入队', verify: '人工分类已签署', dispatch: '值班指令已发布', close: '复盘已结案', retry: '计算已重新入队'};
+const feedback = {register: '申请已登记', publish: '潮窗已发布', revise: '改期已保存', assign: '拖轮已预约', confirm: '靠泊已确认', report: '现场事件已入队', verify: '人工分类已签署', dispatch: '值班指令已发布', close: '复盘已结案', correction: '靠妥时间已补正', retry: '计算已重新入队', retrySample: '样本已重新入队', publishSample: '样本已发布'};
 let noticeTimer;
 let revision = 0;
 
@@ -103,6 +103,22 @@ root.addEventListener('click', event => {
     refresh();
   }
   if (action === 'refresh') refresh();
+  const sampleRetry = event.target.closest('[data-sample-retry]');
+  if (sampleRetry && supervisor() && !store.busy) {
+    store.busy = true;
+    api.retrySample(sampleRetry.dataset.sampleRetry)
+      .then(() => { toast(feedback.retrySample); return refresh(); })
+      .catch(failure => { store.error = failure.message; render(); })
+      .finally(() => { store.busy = false; });
+  }
+  const samplePublish = event.target.closest('[data-sample-publish]');
+  if (samplePublish && supervisor() && !store.busy) {
+    store.busy = true;
+    api.publishSample(samplePublish.dataset.samplePublish)
+      .then(() => { toast(feedback.publishSample); return refresh(); })
+      .catch(failure => { store.error = failure.message; render(); })
+      .finally(() => { store.busy = false; });
+  }
 });
 
 root.addEventListener('change', event => {

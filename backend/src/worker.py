@@ -8,11 +8,31 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .classifier import classify
 from .database import Session, WAKE_QUEUE, queue
-from .models import DelayClass, DelayIncident, IncidentState
+from .models import DelayClass, DelayIncident, IncidentState, SampleState, TrainingSample
 from .planning import audit
+from .samples import generate
 
 log = logging.getLogger(__name__)
 heartbeat = Path('/tmp/berth-heartbeat')
+
+
+def process_sample():
+    with Session.begin() as db:
+        sample = db.scalar(select(TrainingSample).where(TrainingSample.state == SampleState.QUEUED)
+                           .order_by(TrainingSample.id).limit(1).with_for_update(skip_locked=True))
+        if not sample:
+            return False
+        sample.attempts += 1
+        try:
+            generate(db, sample)
+        except Exception as exc:
+            log.exception('Sample generation failed for %s v%s', sample.incident_code, sample.version)
+            sample.state = SampleState.FAILED
+            sample.error = str(exc)[:180]
+            audit(db, 'worker', sample.incident_code, 'SAMPLE_FAILED', f'v{sample.version} · {sample.error}')
+            return True
+        log.info('sample %s v%s %s', sample.incident_code, sample.version, sample.label)
+        return True
 
 
 def process_next():
@@ -43,7 +63,7 @@ def run():
     logging.basicConfig(level=logging.INFO)
     while True:
         try:
-            processed = process_next()
+            processed = process_next() or process_sample()
         except SQLAlchemyError:
             log.exception('Database unavailable')
             time.sleep(2)

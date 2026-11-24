@@ -32,5 +32,8 @@ export const api = {
   verify: (code, data) => request(`/delay-incidents/${encodeURIComponent(code)}/margin-review`, 'POST', data),
   dispatch: (code, data) => request(`/delay-incidents/${encodeURIComponent(code)}/dispatch`, 'POST', data),
   close: (code, data) => request(`/delay-incidents/${encodeURIComponent(code)}/close`, 'POST', data),
+  correct: (code, data) => request(`/delay-incidents/${encodeURIComponent(code)}/correction`, 'POST', data),
   retry: code => request(`/delay-incidents/${encodeURIComponent(code)}/retry`, 'POST'),
+  retrySample: id => request(`/training-samples/${encodeURIComponent(id)}/retry`, 'POST'),
+  publishSample: id => request(`/training-samples/${encodeURIComponent(id)}/publish`, 'POST'),
 };

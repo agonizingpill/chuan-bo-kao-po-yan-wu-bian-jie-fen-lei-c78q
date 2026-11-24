@@ -36,6 +36,9 @@ export const eventNames = {
   INCIDENT_QUEUED: '登记现场延误', INCIDENT_REQUEUED: '重试模型', MODEL_FAILED: '模型计算失败', MODEL_CLASSIFIED: '模型分类',
   MARGIN_REVIEWED: '主管签署分类', MARGIN_REVIEW_REQUIRED: '间隔带未复核', ACTION_ISSUED: '发布调度指令', REVIEW_CLOSED: '完成复盘',
   PRIORITY_ACTION_REQUIRED: '处置级别不符', ALL_FAST_TIME: '复盘时间不符',
+  ALL_FAST_CORRECTED: '补正靠妥时间', SAMPLE_QUEUED: '训练样本入队', SAMPLE_REQUEUED: '训练样本重跑',
+  SAMPLE_GENERATED: '训练样本已生成', SAMPLE_PUBLISHED: '训练样本已发布', SAMPLE_FAILED: '训练样本生成失败',
+  CORRECTION_STATE: '补正状态不符', SAMPLE_PUBLISH_STATE: '样本发布状态不符', SAMPLE_RETRY_STATE: '样本重试状态不符',
 };
 
 export function journal(events) {

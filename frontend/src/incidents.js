@@ -1,7 +1,33 @@
-import {actions, canWrite, decisions, incidentStates, store, supervisor} from './store.js';
+import {actions, canWrite, decisions, incidentStates, sampleLabels, sampleStates, store, supervisor} from './store.js';
 import {blank, esc, field, form, journal, notes, pill, portDate, selectField, timeInput, title} from './ui.js';
 
 const features = {eta_offset_min: '引航偏离 / 分钟', tide_reserve_min: '潮窗余量 / 分钟', wind_kn: '现场风速 / kn', tug_wait_min: '拖轮等候 / 分钟'};
+
+function samplePanel(incident) {
+  const versions = store.data.samples.filter(s => s.incident_code === incident.code);
+  if (!versions.length) return '';
+  const rows = versions.map(s => `<div class="sample-card">
+    <div class="sample-head"><strong class="mono">样本 v${s.version}</strong>${pill(s.state, sampleStates)}
+      <span class="sample-label ${esc(s.label)}">${esc(sampleLabels[s.label])}</span></div>
+    <dl class="measurements">
+      <div><dt>冻结观测</dt><dd>${Object.entries(features).map(([key, label]) => `${esc(label)} ${esc(s.observed_features[key])}`).join('<br>')}</dd></div>
+      <div><dt>潮窗 / 结束</dt><dd>${esc(s.window_code)}<br>${esc(portDate(s.window_ends_at))}</dd></div>
+      <div><dt>靠妥凭据</dt><dd>${esc(portDate(s.all_fast_at))}</dd></div>
+    </dl>
+    <p class="digest">SHA-256 ${esc(s.input_digest)}</p>
+    ${s.error ? `<p class="warning">${esc(s.error)}</p>` : ''}
+    ${s.state === 'failed' && supervisor() ? `<button type="button" class="quiet" data-sample-retry="${esc(s.id)}">按冻结观测重试生成</button>` : ''}
+    ${s.state === 'generated' && supervisor() ? `<button type="button" class="quiet" data-sample-publish="${esc(s.id)}">发布本版样本</button>` : ''}
+  </div>`);
+  return `<h3>训练样本</h3><p class="muted">仅跟踪指令结案的案件入样；靠妥晚于登记潮窗结束记为超时。补正先于发布落定时重跑待生成版本，发布先落定时保留原版标签。</p>${rows.join('')}`;
+}
+
+function correctionForm(incident, record) {
+  if (incident.state !== 'closed' || !supervisor()) return '';
+  return `<details class="paper-fold"><summary>补正靠妥时间</summary>${form('correction', incident.code, `
+    <div class="form-grid">${field('全缆系妥时刻', 'all_fast_at', 'datetime-local', '', `min="${esc(timeInput(incident.observed_at))}"`)}</div>
+    ${notes('补正依据', 'reason', '写明凭据来源及补正原因。')}`, '保存补正')}</details>`;
+}
 
 function caseIntake() {
   if (!canWrite()) return '';
@@ -78,6 +104,8 @@ export function reviews(code) {
       <dl class="measurements"><div><dt>原计划引航</dt><dd>${esc(portDate(request.eta))}</dd></div><div><dt>延误观测</dt><dd>${esc(portDate(incident.observed_at))}</dd></div><div><dt>全缆系妥</dt><dd>${esc(portDate(record.all_fast_at))}</dd></div></dl>
       ${record.closed_at ? `<p class="clearance"><strong>结案人 ${esc(record.closed_by)}</strong> · ${esc(record.outcome)}</p>` : supervisor() ? form('close', code, `<h3>补登作业实绩</h3>${field('全缆系妥时刻', 'all_fast_at', 'datetime-local', '', `min="${esc(timeInput(incident.observed_at))}"`)}
         ${notes('复盘纪要', 'outcome', '写明指令执行结果、交接人及改进项。')}`, '保存实绩并结案') : '<p class="muted">等待主管补登作业实绩。</p>'}
+      ${record.closed_at ? correctionForm(incident, record) : ''}
+      ${record.closed_at ? samplePanel(incident) : ''}
       <h3>交接与核验记录</h3>${journal(store.history)}`;
   }
   return `${title('调度复盘', '把处置指令、现场实绩和交接原因留在同一案件。')}

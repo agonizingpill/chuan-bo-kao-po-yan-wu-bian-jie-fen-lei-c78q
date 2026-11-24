@@ -9,6 +9,7 @@ from .database import WAKE_QUEUE, queue
 from .models import Action, BerthRequest, DelayClass, DelayIncident, DispatchReview, IncidentState, RequestState
 from .planning import Rejected, audit, find, require_window, tide_clearance, utc_now
 from .schemas import CloseInput, DispatchInput, IncidentInput, MarginDecision
+from . import samples
 
 log = logging.getLogger(__name__)
 
@@ -100,5 +101,6 @@ def close(db: DatabaseSession, actor: str, code: str, data: CloseInput):
     record.closed_by = actor
     incident.state = IncidentState.CLOSED
     request.state = RequestState.COMPLETED
+    sample = samples.create_for_close(db, actor, incident, record)
     audit(db, actor, code, 'REVIEW_CLOSED', f'{data.all_fast_at:%m-%d %H:%M} · {data.outcome}')
-    return record
+    return record, sample

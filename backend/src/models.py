@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, Float, ForeignKey, Index, Integer, JSON, String, text
+from sqlalchemy import CheckConstraint, DateTime, Enum, Float, ForeignKey, Index, Integer, JSON, String, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 
 
@@ -35,6 +35,18 @@ class Action(StrEnum):
     MONITOR = 'monitor'
     RETIME = 'retime'
     STANDBY = 'standby'
+
+
+class SampleState(StrEnum):
+    QUEUED = 'queued'
+    FAILED = 'failed'
+    GENERATED = 'generated'
+    PUBLISHED = 'published'
+
+
+class SampleLabel(StrEnum):
+    OVERTIME = 'overtime'
+    ON_TIME = 'on_time'
 
 
 def enum(kind):
@@ -146,3 +158,29 @@ class Audit(Base):
     reference = mapped_column(String(100), nullable=False, index=True)
     event = mapped_column(String(48), nullable=False)
     note = mapped_column(String(400), nullable=False)
+
+
+class TrainingSample(Base):
+    """Frozen observation plus the tide-window overtime label used for training."""
+
+    __tablename__ = 'training_samples'
+    __table_args__ = (
+        UniqueConstraint('incident_code', 'version', name='sample_incident_version_uq'),
+        CheckConstraint('version > 0'),
+        Index('sample_version_idx', 'version', 'state'),
+    )
+    id = mapped_column(Integer, primary_key=True)
+    incident_code = mapped_column(ForeignKey('delay_incidents.code'), nullable=False, index=True)
+    version = mapped_column(Integer, nullable=False)
+    observed_features = mapped_column(JSON, nullable=False)
+    input_digest = mapped_column(String(64), nullable=False)
+    window_code = mapped_column(String(32), nullable=False)
+    window_ends_at = mapped_column(DateTime, nullable=False)
+    all_fast_at = mapped_column(DateTime, nullable=False)
+    label = mapped_column(enum(SampleLabel), nullable=False)
+    state = mapped_column(enum(SampleState), nullable=False, default=SampleState.QUEUED, index=True)
+    error = mapped_column(String(180))
+    attempts = mapped_column(Integer, nullable=False, default=0)
+    generated_by = mapped_column(String(32), nullable=False)
+    generated_at = mapped_column(DateTime, nullable=False)
+    published_at = mapped_column(DateTime)
